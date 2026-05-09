@@ -1,0 +1,281 @@
+/* ================================================
+   CRITERIOS.CSS – Grupo Dalvi
+   ================================================ */
+
+/* ── RESUMEN ────────────────────────────────────── */
+.criterios-summary {
+    display: flex;
+    align-items: center;
+    margin: 0 28px 22px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 24px;
+    box-shadow: var(--shadow-sm);
+}
+.criterios-summary .summary-item { flex: 1; text-align: center; }
+.criterios-summary .summary-num  {
+    font-size: 26px; font-weight: 700;
+    font-family: 'Space Mono', monospace;
+    color: var(--text-primary); line-height: 1;
+    display: block;
+}
+.criterios-summary .summary-label {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--text-muted); font-weight: 600;
+}
+.criterios-summary .summary-divider {
+    width: 1px; height: 36px; background: var(--border); flex-shrink: 0;
+}
+
+/* ── CONTENT WRAPPER ────────────────────────────── */
+.criterios-content {
+    margin: 0 28px 40px;
+}
+
+/* ── TOOLBAR ────────────────────────────────────── */
+.criterios-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+.criterios-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ── GRID DE CRITERIOS ──────────────────────────── */
+.criterios-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+}
+
+/* ── TARJETA DE CRITERIO ────────────────────────── */
+.criterio-card {
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    position: relative;
+    transition: all .2s;
+    cursor: pointer;
+    animation: fadeUp .3s ease both;
+    overflow: hidden;
+}
+.criterio-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #2563eb, #10b981);
+    opacity: 0;
+    transition: opacity .2s;
+}
+.criterio-card:hover {
+    border-color: var(--accent-light);
+    box-shadow: 0 6px 24px rgba(37,99,235,.10);
+    transform: translateY(-2px);
+}
+.criterio-card:hover::before { opacity: 1; }
+
+/* Número de criterio */
+.criterio-num {
+    position: absolute;
+    top: 14px; right: 14px;
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text-muted);
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 20px;
+}
+
+/* Nombre */
+.criterio-nombre {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    padding-right: 40px;
+    line-height: 1.4;
+}
+
+/* Puntaje */
+.criterio-puntaje {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-bottom: 16px;
+}
+.puntaje-valor {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: 'Space Mono', monospace;
+    color: var(--accent);
+    line-height: 1;
+}
+.puntaje-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+/* Barra visual del puntaje (max 100) */
+.criterio-barra {
+    height: 5px;
+    background: #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+.criterio-barra-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2563eb, #10b981);
+    border-radius: 10px;
+    transition: width .6s cubic-bezier(.4,0,.2,1);
+}
+
+/* Acciones de la tarjeta */
+.criterio-acciones {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 4px;
+}
+.btn-criterio {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Sora', sans-serif;
+    cursor: pointer;
+    transition: all .15s;
+    border: 1px solid transparent;
+}
+.btn-criterio.editar {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+.btn-criterio.editar:hover {
+    background: #dbeafe;
+}
+.btn-criterio.eliminar {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #b91c1c;
+}
+.btn-criterio.eliminar:hover {
+    background: #fee2e2;
+}
+
+/* ── SKELETON ───────────────────────────────────── */
+.skeleton-card {
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    cursor: default;
+}
+.skeleton-card:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: var(--border);
+}
+
+/* ── EMPTY STATE ────────────────────────────────── */
+.criterios-empty {
+    text-align: center;
+    padding: 60px 20px;
+    background: #fff;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+}
+.empty-icon  { font-size: 48px; display: block; margin-bottom: 14px; }
+.empty-title { font-size: 17px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.empty-sub   { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+/* ── MODAL PEQUEÑO ──────────────────────────────── */
+.modal-sm {
+    width: min(380px, calc(100vw - 32px)) !important;
+}
+.eliminar-msg {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+.eliminar-msg strong { color: var(--text-primary); }
+
+/* Botón eliminar confirmar */
+.btn-eliminar-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 22px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+    border: none;
+    font-family: 'Sora', sans-serif;
+    background: linear-gradient(135deg, #7f1d1d, #ef4444);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(239,68,68,.28);
+}
+.btn-eliminar-confirm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(239,68,68,.38);
+}
+.btn-eliminar-confirm:disabled {
+    opacity: .65; cursor: not-allowed; transform: none;
+}
+
+/* Input suffix (pts) */
+.input-suffix {
+    position: absolute;
+    right: 13px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+/* ── HIGHLIGHT BÚSQUEDA ─────────────────────────── */
+.highlight {
+    background: #fef9c3;
+    border-radius: 3px;
+    padding: 0 2px;
+    font-weight: 700;
+}
+
+/* ── RESPONSIVE ─────────────────────────────────── */
+@media (max-width: 900px) {
+    .criterios-content  { margin: 0 16px 32px; }
+    .criterios-summary  { margin: 0 16px 18px; padding: 14px 18px; }
+    .criterios-grid     { grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); }
+}
+@media (max-width: 640px) {
+    .criterios-content  { margin: 0 12px 28px; }
+    .criterios-summary  { margin: 0 12px 14px; }
+    .criterios-grid     { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .criterios-toolbar  { flex-direction: column; align-items: flex-start; }
+    .criterios-hint     { display: none; }
+    .topbar-right .btn-evaluar { display: none; }
+}
+@media (max-width: 400px) {
+    .criterios-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,234 @@
+/* ================================================
+   HEATMAP.CSS – Grupo Dalvi
+   ================================================ */
+
+/* ── STATS ──────────────────────────────────────── */
+.heat-stats {
+    display: flex; align-items: center;
+    margin: 0 28px 16px;
+    background: #fff; border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 24px;
+    box-shadow: var(--shadow-sm);
+}
+.heat-stat       { flex: 1; text-align: center; }
+.heat-stat-num   {
+    display: block; font-size: 24px; font-weight: 700;
+    font-family: 'Space Mono', monospace;
+    color: var(--text-primary); line-height: 1; margin-bottom: 3px;
+}
+.heat-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted); font-weight: 600; }
+.heat-stat-div   { width: 1px; height: 32px; background: var(--border); flex-shrink: 0; }
+
+/* ── LEYENDA ────────────────────────────────────── */
+.heat-leyenda {
+    display: flex; align-items: center; gap: 12px;
+    margin: 0 28px 14px; flex-wrap: wrap;
+}
+.heat-leyenda-label {
+    font-size: 11px; font-weight: 700;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px;
+    white-space: nowrap;
+}
+.heat-leyenda-items { display: flex; gap: 6px; flex-wrap: wrap; }
+.heat-chip {
+    font-size: 10px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px;
+    font-family: 'Space Mono', monospace;
+    border: 1px solid rgba(0,0,0,.08);
+}
+
+/* ── TOOLBAR ────────────────────────────────────── */
+.heat-toolbar {
+    display: flex; align-items: center; gap: 12px;
+    margin: 0 28px 14px; flex-wrap: wrap;
+}
+.heat-select {
+    padding: 8px 14px; border: 1.5px solid var(--border);
+    border-radius: 10px; font-size: 12px;
+    font-family: 'Sora', sans-serif;
+    background: var(--bg-card); color: var(--text-primary);
+    outline: none; cursor: pointer;
+    transition: border-color .2s;
+}
+.heat-select:focus { border-color: var(--accent-light); }
+
+/* ── WRAP + SCROLL ──────────────────────────────── */
+.heat-wrap {
+    margin: 0 28px 40px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+.heat-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 70vh;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+.heat-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.heat-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ── TABLA ──────────────────────────────────────── */
+.heat-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12px;
+}
+
+/* Header */
+.heat-table thead tr {
+    background: #0f1b2d;
+    position: sticky; top: 0; z-index: 10;
+}
+.heat-table thead th {
+    padding: 10px 8px;
+    color: rgba(255,255,255,.8);
+    font-weight: 600;
+    white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,.08);
+    text-align: center;
+}
+.heat-th-fixed {
+    position: sticky; left: 0; z-index: 11;
+    background: #0f1b2d;
+    text-align: left !important;
+    min-width: 160px;
+    padding-left: 16px !important;
+}
+.heat-th-area  { left: 160px !important; min-width: 120px; }
+.heat-th-prom  { min-width: 64px; }
+.heat-th-crit  { min-width: 80px; max-width: 100px; vertical-align: bottom; }
+.heat-th-txt {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 10px;
+    max-height: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+    padding: 4px 0;
+}
+.heat-th-max {
+    font-size: 9px;
+    color: rgba(255,255,255,.45);
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    margin-top: 2px;
+}
+
+/* Filas */
+.heat-row {
+    border-bottom: 1px solid #f1f5f9;
+    transition: filter .15s;
+}
+.heat-row:last-child { border-bottom: none; }
+.heat-row:hover { filter: brightness(.95); }
+
+/* Celda colaborador (sticky) */
+.heat-td-colab {
+    position: sticky; left: 0; z-index: 2;
+    background: #fff;
+    display: flex; align-items: center; gap: 9px;
+    padding: 10px 12px 10px 16px;
+    min-width: 160px;
+    border-right: 1px solid var(--border);
+    white-space: nowrap;
+}
+.heat-row:nth-child(even) .heat-td-colab { background: #fafbff; }
+
+/* Celda área (sticky) */
+.heat-td-area {
+    position: sticky; left: 160px; z-index: 2;
+    background: #fff;
+    padding: 10px 12px;
+    min-width: 120px;
+    border-right: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+.heat-row:nth-child(even) .heat-td-area { background: #fafbff; }
+
+/* Avatar */
+.heat-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg,#1e40af,#3b82f6);
+    color: #fff; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.heat-colab-info { min-width: 0; }
+.heat-colab-nombre {
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 110px; display: block;
+}
+
+/* Promedio badge */
+.heat-td-prom {
+    text-align: center; padding: 8px;
+    border-right: 2px solid var(--border);
+}
+.heat-prom-badge {
+    display: inline-block;
+    font-size: 12px; font-weight: 700;
+    font-family: 'Space Mono', monospace;
+    padding: 3px 8px; border-radius: 20px;
+    border: 1px solid rgba(0,0,0,.08);
+}
+
+/* Celdas del heatmap */
+.heat-cell {
+    text-align: center;
+    padding: 10px 6px;
+    font-size: 11px; font-weight: 700;
+    font-family: 'Space Mono', monospace;
+    border-right: 1px solid rgba(255,255,255,.5);
+    cursor: default;
+    transition: filter .15s;
+    min-width: 60px;
+}
+.heat-cell:hover { filter: brightness(.9); }
+
+/* ── EMPTY / NO RESULTS ─────────────────────────── */
+.heat-empty {
+    text-align: center; padding: 60px 20px;
+    margin: 0 28px 40px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border); border-radius: var(--radius);
+}
+.heat-empty-icon  { font-size: 48px; display: block; margin-bottom: 14px; }
+.heat-empty-title { font-size: 17px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.heat-empty-sub   { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+.heat-no-results {
+    text-align: center; padding: 32px;
+    margin: 0 28px 32px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border); border-radius: var(--radius);
+    color: var(--text-muted); font-size: 13px;
+}
+.heat-no-results span { font-size: 28px; display: block; margin-bottom: 8px; }
+
+/* ── RESPONSIVE ─────────────────────────────────── */
+@media (max-width: 900px) {
+    .heat-stats   { margin: 0 16px 14px; padding: 12px 16px; }
+    .heat-leyenda { margin: 0 16px 12px; }
+    .heat-toolbar { margin: 0 16px 12px; }
+    .heat-wrap    { margin: 0 16px 32px; }
+    .heat-empty   { margin: 0 16px 32px; }
+}
+@media (max-width: 640px) {
+    .heat-stats   { flex-wrap: wrap; margin: 0 12px 12px; }
+    .heat-stat-div{ display: none; }
+    .heat-stat    { flex: 1 1 40%; }
+    .heat-wrap    { margin: 0 12px 28px; }
+    .heat-th-txt  { max-height: 70px; font-size: 9px; }
+}
