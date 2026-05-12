@@ -1,5 +1,5 @@
 <?php
-$host     = 'fusion-investigators-spouse-falls.trycloudflare.com';
+$host     = '127.0.0.1';
 $port     = 3306;
 $usuario  = 'Dalvi';
 $password = 'gd2026';
