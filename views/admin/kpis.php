@@ -58,7 +58,6 @@ $totalKps   = $conexion->query("SELECT COUNT(*) as t FROM kps")->fetch_assoc()['
             <span class="status-text">Activo ahora</span>
             <a href="../../php/logout.php" class="btn-logout">↩ Salir</a>
         </div>
-        <button class="btn-tour">▶ Ver Tour de Bienvenida</button>
     </div>
 </aside>
 

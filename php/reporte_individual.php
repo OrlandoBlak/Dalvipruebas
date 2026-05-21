@@ -19,7 +19,7 @@ while ($c = $cols->fetch_assoc()) {
 }
 $selCargo = $cargoCol ? "c.`$cargoCol` AS Cargo" : "'' AS Cargo";
 
-// Datos del colaborador
+// Datos colaborador
 $stmtC = $conexion->prepare("
     SELECT c.Id_Colaborador, c.Nombre, $selCargo, a.Nombre AS area_nombre, a.Id_Area
     FROM colaboradores c
@@ -31,7 +31,7 @@ $stmtC->execute();
 $colab = $stmtC->get_result()->fetch_assoc();
 if (!$colab) { echo "Colaborador no encontrado"; exit(); }
 
-// Todas las evaluaciones del colaborador
+// Evaluaciones del colaborador
 $stmtE = $conexion->prepare("
     SELECT e.*, o.Observacion, o.Puntos, o.Pendientes, o.Comentarios
     FROM evaluaciones e
@@ -43,34 +43,33 @@ $stmtE->bind_param("i", $id_colaborador);
 $stmtE->execute();
 $evals = $stmtE->get_result()->fetch_all(MYSQLI_ASSOC);
 
-if (empty($evals)) { echo "<p style='padding:40px;font-family:sans-serif'>Este colaborador no tiene evaluaciones.</p>"; exit(); }
-
-// Evaluación más reciente
-$evalActual = $evals[0];
-$promedio   = (float)$evalActual['Evaluacion'];
-$criteriosArr = array_map('trim', explode(',', $evalActual['Criterios'] ?? ''));
-$totalCriterios = count(array_filter($criteriosArr));
-
-// KPIs del área con resultado más reciente
-$kpisArea = [];
-if ($colab['Id_Area']) {
-    $stmtK = $conexion->prepare("
-        SELECT k.Nombre, k.Tipo, k.Metas,
-               COALESCE(r.Dato_Ingresado, 0) AS Dato_Ingreso
-        FROM kps k
-        LEFT JOIN (
-            SELECT Id_KPs, MAX(Id_Result) AS maxR FROM resultados GROUP BY Id_KPs
-        ) rm ON rm.Id_KPs = k.Id_KPs
-        LEFT JOIN resultados r ON r.Id_Result = rm.maxR
-        WHERE k.Id_Area = ?
-        ORDER BY k.Id_KPs ASC
-    ");
-    $stmtK->bind_param("i", $colab['Id_Area']);
-    $stmtK->execute();
-    $kpisArea = $stmtK->get_result()->fetch_all(MYSQLI_ASSOC);
+if (empty($evals)) {
+    echo "<p style='padding:40px;font-family:sans-serif'>Sin evaluaciones registradas.</p>"; exit();
 }
 
-// Criterios con detalles de la tabla puntos
+$evalActual     = $evals[0];
+$promedio       = (float)$evalActual['Evaluacion'];
+$criteriosArr   = array_filter(array_map('trim', explode(',', $evalActual['Criterios'] ?? '')));
+$totalCriterios = count($criteriosArr);
+
+// ── CRITERIOS INDIVIDUALES desde criterios_resultados ────
+$criteriosResultados = [];
+$stmtCR = $conexion->prepare("
+    SELECT Datos_Guardado
+    FROM criterios_resultados
+    WHERE Id_Evaluacion = ?
+");
+if ($stmtCR) {
+    $stmtCR->bind_param("i", $evalActual['Id_Evaluacion']);
+    $stmtCR->execute();
+    $resCR = $stmtCR->get_result();
+    while ($row = $resCR->fetch_assoc()) {
+        $data = json_decode($row['Datos_Guardado'], true);
+        if ($data && isset($data['criterio'])) $criteriosResultados[$data['criterio']] = $data;
+    }
+}
+
+// Si no hay datos en criterios_resultados, usar criterios desde tabla puntos
 $criteriosDetalle = [];
 if (!empty($criteriosArr)) {
     $placeholders = implode(',', array_fill(0, count($criteriosArr), '?'));
@@ -84,22 +83,50 @@ if (!empty($criteriosArr)) {
     }
 }
 
-// Nivel según estadísticas
-$pct = ($promedio / 10) * 100;
-if ($pct >= 90)     { $nivelTxt = 'Excepcional';       $nivelColor = '#065f46'; }
-elseif ($pct >= 75) { $nivelTxt = 'En camino';         $nivelColor = '#1d4ed8'; }
-elseif ($pct >= 60) { $nivelTxt = 'En desarrollo';     $nivelColor = '#92400e'; }
-else                { $nivelTxt = 'Por Debajo';        $nivelColor = '#b91c1c'; }
+// KPIs del área con resultados
+$kpisArea = [];
+if ($colab['Id_Area']) {
+    $stmtK = $conexion->prepare("
+        SELECT k.Nombre, k.Tipo, k.Metas,
+               COALESCE(r.Dato_Ingresado, 0) AS Dato_Ingreso
+        FROM kps k
+        LEFT JOIN (
+            SELECT Id_KPs, MAX(Id_Result) AS maxR FROM resultados GROUP BY Id_KPs
+        ) rm ON rm.Id_KPs = k.Id_KPs
+        LEFT JOIN resultados r ON r.Id_Result = rm.maxR
+        WHERE k.Id_Area = ?
+        ORDER BY k.Id_KPs ASC
+    ");
+    if ($stmtK) {
+        $stmtK->bind_param("i", $colab['Id_Area']);
+        $stmtK->execute();
+        $kpisArea = $stmtK->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+}
 
-// Estrellas
+// Insignia
+$idInsignia  = (int)($evalActual['Id_Insignia'] ?? 0);
+$insArr      = [];
+$insIconos   = ['❤️','💎','🚀','⚡','💬','🤝','🔄'];
+if ($idInsignia > 0) {
+    $insRes2 = $conexion->query("SELECT Id_Insignia, Descripcion FROM insignias ORDER BY Id_Insignia ASC");
+    $allIns  = [];
+    while ($ir = $insRes2->fetch_assoc()) $allIns[$ir['Id_Insignia']] = $ir['Descripcion'];
+    if (isset($allIns[$idInsignia])) $insArr[$idInsignia] = $allIns[$idInsignia];
+}
+
+// Nivel
+$pct = ($promedio / 10) * 100;
+if ($pct >= 90)     { $nivelTxt = 'Excepcional';   $nivelColor = '#065f46'; }
+elseif ($pct >= 75) { $nivelTxt = 'En camino';     $nivelColor = '#1d4ed8'; }
+elseif ($pct >= 60) { $nivelTxt = 'En desarrollo'; $nivelColor = '#92400e'; }
+else                { $nivelTxt = 'Por Debajo';    $nivelColor = '#b91c1c'; }
+
 function stars($v,$max=5){$l=round(($v/10)*$max);$s='';for($i=1;$i<=$max;$i++)$s.=$i<=$l?'★':'☆';return $s;}
 
-$fechaEval   = date('d \d\e F \d\e Y', strtotime($evalActual['Id_Evaluacion'] ? 'now' : 'now'));
 $fechaActual = date('d/m/Y');
 $periodo     = date('Y');
 $ini         = mb_strtoupper(mb_substr($colab['Nombre'],0,1));
-
-// Calcular peso de cada criterio (distribución igual si no hay pesos)
 $pesoCriterio = $totalCriterios > 0 ? round(100 / $totalCriterios, 0) : 0;
 ?>
 <!DOCTYPE html>
@@ -111,50 +138,43 @@ $pesoCriterio = $totalCriterios > 0 ? round(100 / $totalCriterios, 0) : 0;
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e293b; font-size:13px; }
 
-/* ── BOTÓN IMPRIMIR ─────────── */
 .print-bar {
-    position: fixed; top:0; left:0; right:0; z-index:100;
+    position:fixed; top:0; left:0; right:0; z-index:100;
     background:#0f1b2d; padding:10px 24px;
     display:flex; align-items:center; justify-content:space-between;
     box-shadow:0 2px 8px rgba(0,0,0,.3);
 }
 .print-bar-title { color:rgba(255,255,255,.7); font-size:13px; }
-.print-bar-btns { display:flex; gap:10px; }
+.print-bar-btns  { display:flex; gap:10px; }
 .btn-print {
     background:linear-gradient(135deg,#2563eb,#3b82f6);
     color:#fff; border:none; padding:8px 20px;
-    border-radius:8px; font-size:13px; font-weight:600;
-    cursor:pointer; font-family:inherit;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;
 }
 .btn-back {
-    background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.1); color:#fff;
+    border:1px solid rgba(255,255,255,.2);
     padding:8px 16px; border-radius:8px; font-size:13px;
-    cursor:pointer; font-family:inherit; text-decoration:none;
-    display:inline-flex; align-items:center;
+    cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;
 }
 
-/* ── PÁGINA ─────────────────── */
 .page {
     width:216mm; min-height:280mm;
     margin:60px auto 20px; background:#fff;
     padding:18mm 16mm 14mm;
     box-shadow:0 4px 32px rgba(0,0,0,.12);
-    position:relative;
 }
 
-/* ── HEADER ─────────────────── */
 .report-header {
     display:flex; justify-content:space-between; align-items:flex-start;
     margin-bottom:6mm; padding-bottom:4mm;
     border-bottom:1px solid #e2e8f0;
 }
-.brand-name { font-size:22px; font-weight:800; color:#2563eb; letter-spacing:-0.5px; }
+.brand-name  { font-size:22px; font-weight:800; color:#2563eb; }
 .brand-group { font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:2px; }
-.report-meta { text-align:right; }
-.report-meta-title { font-size:13px; font-weight:700; color:#475569; }
-.report-meta-date  { font-size:11px; color:#94a3b8; margin-top:3px; }
+.report-meta-title { font-size:13px; font-weight:700; color:#475569; text-align:right; }
+.report-meta-date  { font-size:11px; color:#94a3b8; margin-top:3px; text-align:right; }
 
-/* ── PERFIL ─────────────────── */
 .perfil-section {
     display:flex; align-items:center; gap:16px;
     background:linear-gradient(135deg,#f0f6ff,#fff);
@@ -165,39 +185,23 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     width:54px; height:54px; border-radius:50%;
     background:linear-gradient(135deg,#1e40af,#3b82f6);
     color:#fff; font-size:22px; font-weight:700;
-    display:flex; align-items:center; justify-content:center;
-    flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
 }
-.perfil-info { flex:1; }
-.perfil-nombre { font-size:18px; font-weight:700; color:#1e293b; margin-bottom:2px; }
-.perfil-cargo  { font-size:12px; color:#64748b; margin-bottom:5px; }
-.perfil-area   {
-    display:inline-block; background:#dbeafe; color:#1d4ed8;
-    font-size:10px; font-weight:700; padding:2px 10px;
-    border-radius:20px; letter-spacing:.3px;
-}
-.perfil-score { text-align:center; }
-.perfil-score-num {
-    font-size:36px; font-weight:800; color:#2563eb;
-    font-family:'Courier New',monospace; line-height:1;
-}
+.perfil-info    { flex:1; }
+.perfil-nombre  { font-size:18px; font-weight:700; color:#1e293b; margin-bottom:2px; }
+.perfil-cargo   { font-size:12px; color:#64748b; margin-bottom:5px; }
+.perfil-area    { display:inline-block; background:#dbeafe; color:#1d4ed8; font-size:10px; font-weight:700; padding:2px 10px; border-radius:20px; }
+.perfil-score   { text-align:center; }
+.perfil-score-num { font-size:36px; font-weight:800; color:#2563eb; font-family:'Courier New',monospace; line-height:1; }
 .perfil-score-den { font-size:14px; color:#94a3b8; }
 .perfil-score-stars { font-size:16px; color:#f59e0b; letter-spacing:2px; margin-top:3px; }
 .perfil-score-nivel { font-size:11px; font-weight:700; color:<?= $nivelColor ?>; margin-top:3px; }
 
-/* ── STATS ROW ───────────────── */
-.stats-row {
-    display:grid; grid-template-columns:1fr 1fr 1fr;
-    gap:8px; margin-bottom:6mm;
-}
-.stat-box {
-    border:1px solid #e2e8f0; border-radius:8px;
-    padding:10px 14px; text-align:center;
-}
+.stats-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:6mm; }
+.stat-box { border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; text-align:center; }
 .stat-box-val { font-size:20px; font-weight:800; color:#2563eb; font-family:'Courier New',monospace; }
 .stat-box-lbl { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#94a3b8; margin-top:3px; }
 
-/* ── SECTION TITLE ───────────── */
 .section-title {
     display:flex; align-items:center; gap:8px;
     font-size:11px; font-weight:700; text-transform:uppercase;
@@ -206,101 +210,74 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     margin-bottom:10px; margin-top:8mm;
 }
 
-/* ── TABLA CRITERIOS ─────────── */
+/* ── TABLA CRITERIOS ── */
 .criterios-tabla { width:100%; border-collapse:collapse; font-size:11.5px; }
 .criterios-tabla thead tr { background:#0f1b2d; }
 .criterios-tabla thead th {
     padding:7px 10px; text-align:left; color:rgba(255,255,255,.8);
-    font-size:9px; text-transform:uppercase; letter-spacing:1px;
-    font-weight:600;
+    font-size:9px; text-transform:uppercase; letter-spacing:1px; font-weight:600;
 }
 .criterios-tabla tbody tr { border-bottom:1px solid #f1f5f9; }
-.criterios-tabla tbody tr:last-child { border-bottom:none; }
 .criterios-tabla tbody tr:nth-child(even) { background:#f8faff; }
 .criterios-tabla td { padding:8px 10px; vertical-align:middle; }
+.td-criterio { font-weight:600; color:#1e293b; }
+.td-peso     { text-align:center; color:#64748b; font-size:10px; }
+.td-actual   { text-align:center; font-weight:700; color:#2563eb; font-family:'Courier New',monospace; }
+.td-deseado  { text-align:center; color:#64748b; }
+.td-diff     { text-align:center; font-weight:700; }
+.td-diff.positivo { color:#10b981; }
+.td-diff.negativo { color:#ef4444; }
 
-.td-criterio   { font-weight:600; color:#1e293b; }
-.td-peso       { text-align:center; color:#64748b; font-size:10px; }
-.td-actual     { text-align:center; font-weight:700; color:#2563eb; font-family:'Courier New',monospace; }
-.td-deseado    { text-align:center; color:#64748b; }
-.td-diff       { text-align:center; font-weight:700; color:#ef4444; }
-.td-progreso   { min-width:120px; }
-
-.progreso-wrap { }
-.progreso-labels {
-    display:flex; justify-content:space-between;
-    font-size:9px; color:#94a3b8; margin-bottom:3px;
-}
-.progreso-bars {
-    display:flex; flex-direction:column; gap:2px;
-}
-.barra-wrap  { display:flex; align-items:center; gap:5px; }
-.barra-label { font-size:8px; color:#94a3b8; width:26px; text-align:right; flex-shrink:0; }
+.barra-wrap  { display:flex; align-items:center; gap:5px; margin-bottom:2px; }
+.barra-label { font-size:8px; color:#94a3b8; width:28px; text-align:right; flex-shrink:0; }
 .barra-bg    { flex:1; height:6px; background:#e2e8f0; border-radius:4px; overflow:hidden; }
 .barra-fill-actual { height:100%; background:#3b82f6; border-radius:4px; }
 .barra-fill-meta   { height:100%; background:#10b981; border-radius:4px; }
+.barra-pct   { font-size:9px; font-weight:700; width:32px; }
+.barra-pct.actual { color:#2563eb; }
+.barra-pct.meta   { color:#10b981; }
 
-/* ── KPIs ────────────────────── */
+/* ── KPIs ── */
 .kpis-tabla { width:100%; border-collapse:collapse; font-size:11.5px; }
 .kpis-tabla thead tr { background:#0f1b2d; }
-.kpis-tabla thead th { padding:7px 10px; text-align:left; color:rgba(255,255,255,.8); font-size:9px; text-transform:uppercase; letter-spacing:1px; }
+.kpis-tabla thead th { padding:7px 10px; text-align:left; color:rgba(255,255,255,.8); font-size:9px; text-transform:uppercase; }
 .kpis-tabla tbody tr { border-bottom:1px solid #f1f5f9; }
 .kpis-tabla tbody tr:nth-child(even) { background:#f8faff; }
 .kpis-tabla td { padding:8px 10px; }
-.kpi-avance { font-weight:700; color:#2563eb; }
 
-/* ── HISTORIAL ───────────────── */
+/* ── HISTORIAL ── */
 .historial-tabla { width:100%; border-collapse:collapse; font-size:11.5px; }
 .historial-tabla thead tr { background:#0f1b2d; }
-.historial-tabla thead th { padding:7px 10px; color:rgba(255,255,255,.8); font-size:9px; text-transform:uppercase; letter-spacing:1px; }
+.historial-tabla thead th { padding:7px 10px; color:rgba(255,255,255,.8); font-size:9px; text-transform:uppercase; }
 .historial-tabla tbody tr { border-bottom:1px solid #f1f5f9; }
 .historial-tabla td { padding:8px 10px; }
-.hist-prom { font-weight:700; color:#2563eb; font-family:'Courier New',monospace; }
-.hist-stars { color:#f59e0b; letter-spacing:1px; }
-.tag-primera { background:#dbeafe; color:#1d4ed8; font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; }
+.hist-prom  { font-weight:700; color:#2563eb; font-family:'Courier New',monospace; }
+.hist-stars { color:#f59e0b; }
 
-/* ── OBSERVACIONES ───────────── */
 .obs-box {
     border:1px dashed #f59e0b; border-radius:8px;
     padding:12px 14px; background:#fffbeb;
-    font-size:11.5px; color:#92400e; line-height:1.6;
-    min-height:40px;
+    font-size:11.5px; color:#92400e; line-height:1.6; min-height:40px;
 }
-.obs-hint { font-style:italic; color:#d97706; font-size:11px; }
-
-/* ── COMPROMISOS ─────────────── */
 .compromisos-box {
     border:1px dashed #f59e0b; border-radius:8px;
-    padding:12px 14px; background:#fffbeb;
-    min-height:60px;
+    padding:12px 14px; background:#fffbeb; min-height:60px;
 }
 .compromisos-hint { font-style:italic; color:#d97706; font-size:11px; }
 
-/* ── FIRMAS ──────────────────── */
-.firmas-section {
-    display:grid; grid-template-columns:1fr 1fr;
-    gap:24px; margin-top:8mm;
-}
+.firmas-section { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:8mm; }
 .firma-box { text-align:center; }
-.firma-linea {
-    border-bottom:2px solid #1e293b;
-    margin-bottom:8px; padding-bottom:4px;
-    min-height:40px;
-}
+.firma-linea { border-bottom:2px solid #1e293b; margin-bottom:8px; padding-bottom:4px; min-height:40px; }
 .firma-nombre { font-weight:700; font-size:12px; }
 .firma-cargo  { font-size:10px; color:#64748b; }
-.firma-area   { font-size:10px; color:#64748b; }
 .firma-fecha  { font-size:11px; color:#94a3b8; margin-top:8px; }
 
-/* ── FOOTER ──────────────────── */
 .report-footer {
     display:flex; justify-content:space-between;
     font-size:9px; color:#94a3b8;
-    border-top:1px solid #e2e8f0;
-    padding-top:6px; margin-top:8mm;
+    border-top:1px solid #e2e8f0; padding-top:6px; margin-top:8mm;
 }
 
-/* ── PRINT ───────────────────── */
 @media print {
     .print-bar { display:none !important; }
     body { background:#fff; }
@@ -311,7 +288,6 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
 </head>
 <body>
 
-<!-- BARRA SUPERIOR -->
 <div class="print-bar">
     <span class="print-bar-title">📋 Reporte Individual — <?= htmlspecialchars($colab['Nombre']) ?></span>
     <div class="print-bar-btns">
@@ -323,7 +299,6 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     </div>
 </div>
 
-<!-- PÁGINA -->
 <div class="page">
 
     <!-- HEADER -->
@@ -332,7 +307,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
             <div class="brand-group">GRUPO</div>
             <div class="brand-name">DALVI</div>
         </div>
-        <div class="report-meta">
+        <div>
             <div class="report-meta-title">Evaluación de Desempeño</div>
             <div class="report-meta-date">Fecha: <?= date('d \d\e F \d\e Y') ?></div>
             <div class="report-meta-date">Período: <?= $periodo ?></div>
@@ -372,7 +347,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
         </div>
     </div>
 
-    <!-- CRITERIOS -->
+    <!-- CRITERIOS CON VALORES INDIVIDUALES -->
     <div class="section-title">📊 Criterios — Nivel Actual vs Nivel Deseado</div>
     <table class="criterios-tabla">
         <thead>
@@ -386,38 +361,46 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
             </tr>
         </thead>
         <tbody>
-        <?php
-        $totalPeso = array_sum(array_column($criteriosDetalle, 'Evaluando')) ?: 1;
-        foreach ($criteriosArr as $cNom):
+        <?php foreach ($criteriosArr as $cNom):
             if (empty($cNom)) continue;
-            $det     = $criteriosDetalle[$cNom] ?? null;
-            $maxVal  = $det ? (float)$det['Evaluando'] : 10;
+
+            // Usar datos reales de criterios_resultados si existen
+            if (isset($criteriosResultados[$cNom])) {
+                $valActual = (float)$criteriosResultados[$cNom]['actual'];
+                $maxVal    = (float)$criteriosResultados[$cNom]['maximo'];
+                $pctActual = (float)$criteriosResultados[$cNom]['pct'];
+            } else {
+                // Fallback: calcular desde promedio general
+                $det       = $criteriosDetalle[$cNom] ?? null;
+                $maxVal    = $det ? (float)$det['Evaluando'] : 10;
+                $valActual = round(($promedio / 10) * $maxVal, 1);
+                $pctActual = $maxVal > 0 ? round(($valActual/$maxVal)*100, 1) : 0;
+            }
+
             $isStars = $maxVal <= 5;
-            $actual  = ($promedio / 10) * $maxVal; // normalizado
-            $deseado = $maxVal * 0.9; // nivel deseado = 90%
-            $diff    = round($actual - $deseado, 1);
-            $pctActual = $maxVal > 0 ? round(($actual/$maxVal)*100) : 0;
-            $pctMeta   = 90;
-            $peso      = $det ? round(($det['Evaluando']/$totalPeso)*100) : $pesoCriterio;
+            $deseado = $maxVal * 0.9;
+            $pctMeta = 90;
+            $diff    = round($valActual - $deseado, 1);
+            $peso    = $pesoCriterio;
         ?>
         <tr>
             <td class="td-criterio"><?= htmlspecialchars($cNom) ?></td>
             <td class="td-peso"><?= $peso ?>%</td>
-            <td class="td-actual"><?= number_format($actual,1) ?>/<?= $maxVal ?><?= $isStars?' ⭐':'' ?></td>
+            <td class="td-actual"><?= number_format($valActual,1) ?>/<?= $maxVal ?><?= $isStars?' ⭐':'' ?></td>
             <td class="td-deseado"><?= number_format($deseado,1) ?>/<?= $maxVal ?><?= $isStars?' ⭐':'' ?></td>
-            <td class="td-diff"><?= $diff >= 0 ? '+' : '' ?><?= number_format($diff,1) ?> <?= $diff < 0 ? '⚠️' : '✅' ?></td>
-            <td class="td-progreso">
-                <div class="progreso-wrap">
-                    <div class="barra-wrap">
-                        <span class="barra-label">Actual</span>
-                        <div class="barra-bg"><div class="barra-fill-actual" style="width:<?= $pctActual ?>%"></div></div>
-                        <span style="font-size:9px;color:#3b82f6;width:32px"><?= $pctActual ?>%</span>
-                    </div>
-                    <div class="barra-wrap">
-                        <span class="barra-label">Meta</span>
-                        <div class="barra-bg"><div class="barra-fill-meta" style="width:<?= $pctMeta ?>%"></div></div>
-                        <span style="font-size:9px;color:#10b981;width:32px"><?= $pctMeta ?>%</span>
-                    </div>
+            <td class="td-diff <?= $diff >= 0 ? 'positivo' : 'negativo' ?>">
+                <?= $diff >= 0 ? '+' : '' ?><?= number_format($diff,1) ?> <?= $diff < 0 ? '⚠️' : '✅' ?>
+            </td>
+            <td>
+                <div class="barra-wrap">
+                    <span class="barra-label">Actual</span>
+                    <div class="barra-bg"><div class="barra-fill-actual" style="width:<?= $pctActual ?>%"></div></div>
+                    <span class="barra-pct actual"><?= $pctActual ?>%</span>
+                </div>
+                <div class="barra-wrap">
+                    <span class="barra-label">Meta</span>
+                    <div class="barra-bg"><div class="barra-fill-meta" style="width:<?= $pctMeta ?>%"></div></div>
+                    <span class="barra-pct meta"><?= $pctMeta ?>%</span>
                 </div>
             </td>
         </tr>
@@ -432,7 +415,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
         <thead>
             <tr>
                 <th>KPI</th>
-                <th>Departamento</th>
+                <th>Tipo</th>
                 <th style="text-align:center">Actual</th>
                 <th style="text-align:center">Meta</th>
                 <th style="text-align:center">Avance</th>
@@ -441,19 +424,19 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
         </thead>
         <tbody>
         <?php foreach ($kpisArea as $kpi):
-            $meta    = (float)$kpi['Metas'];
-            $dato    = (float)$kpi['Dato_Ingreso'];
-            $pctKpi  = $meta > 0 ? round(($dato/$meta)*100,1) : 0;
-            $tipo    = $kpi['Tipo'] ?? '';
-            $prefix  = ($tipo === 'Dinero (MXN)') ? '$' : '';
-            $suffix  = ($tipo === 'Porcentaje (%)') ? '%' : (($tipo === 'Unidades') ? ' uds' : '');
+            $meta   = (float)$kpi['Metas'];
+            $dato   = (float)$kpi['Dato_Ingreso'];
+            $pctKpi = $meta > 0 ? round(($dato/$meta)*100,1) : 0;
+            $tipo   = $kpi['Tipo'] ?? '';
+            $prefix = ($tipo === 'Dinero (MXN)') ? '$' : '';
+            $suffix = ($tipo === 'Porcentaje (%)') ? '%' : (($tipo === 'Unidades') ? ' uds' : '');
         ?>
         <tr>
-            <td style="font-weight:600"><?= htmlspecialchars($kpi['Nombre'] ?? 'KPI') ?></td>
-            <td><?= htmlspecialchars($colab['area_nombre']) ?></td>
+            <td style="font-weight:600"><?= htmlspecialchars($kpi['Nombre']??'KPI') ?></td>
+            <td style="font-size:11px;color:#64748b"><?= htmlspecialchars($tipo) ?></td>
             <td style="text-align:center"><?= $prefix.number_format($dato,0).$suffix ?></td>
             <td style="text-align:center"><?= $prefix.number_format($meta,0).$suffix ?></td>
-            <td class="kpi-avance" style="text-align:center"><?= $pctKpi ?>%</td>
+            <td style="text-align:center;font-weight:700;color:#2563eb"><?= $pctKpi ?>%</td>
             <td>
                 <div class="barra-bg" style="max-width:120px">
                     <div class="barra-fill-actual" style="width:<?= min($pctKpi,100) ?>%"></div>
@@ -465,34 +448,16 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     </table>
     <?php else: ?>
     <div class="section-title">📋 KPIs Asignados</div>
-    <p style="font-size:12px;color:#94a3b8;font-style:italic;margin-bottom:4mm">Este colaborador no tiene KPIs asignados.</p>
+    <p style="font-size:12px;color:#94a3b8;font-style:italic;margin-bottom:4mm">Sin KPIs asignados.</p>
     <?php endif; ?>
 
     <!-- INSIGNIAS -->
-    <?php
-    // Cargar insignias desde la tabla insignias usando Id_Insignia
-    $idInsignia = (int)($evalActual['Id_Insignia'] ?? 0);
-    $insArr     = [];
-    $insIconos  = ['❤️','💎','🚀','⚡','💬','🤝','🔄'];
-    if ($idInsignia > 0) {
-        // Mostrar desde la insignia seleccionada hasta el final (todas las marcadas)
-        $insRes2 = $conexion->query("SELECT Id_Insignia, Descripcion FROM insignias ORDER BY Id_Insignia ASC");
-        while ($ir = $insRes2->fetch_assoc()) $insArr[$ir['Id_Insignia']] = $ir['Descripcion'];
-        // Solo la insignia marcada
-        $insArr = isset($insArr[$idInsignia]) ? [$idInsignia => $insArr[$idInsignia]] : [];
-    }
-    // También verificar en evaluaciones si hay texto de insignias_nombres guardado
-    if (empty($insArr) && !empty($evalActual['Insignias']) && !is_numeric($evalActual['Insignias'])) {
-        foreach (array_filter(array_map('trim', explode(',', $evalActual['Insignias']))) as $n) {
-            $insArr[] = $n;
-        }
-    }
-    if (!empty($insArr)): ?>
+    <?php if (!empty($insArr)): ?>
     <div class="section-title">🏅 Insignias de Valores Dalvi</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6mm">
         <?php foreach ($insArr as $i => $insNombre): ?>
         <div style="display:flex;align-items:center;gap:7px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:20px;padding:5px 13px;">
-            <span style="font-size:14px"><?= $insIconos[$i] ?? '🏅' ?></span>
+            <span style="font-size:14px"><?= $insIconos[$i%count($insIconos)] ?? '🏅' ?></span>
             <span style="font-size:11px;font-weight:700;color:#92400e"><?= htmlspecialchars($insNombre) ?></span>
         </div>
         <?php endforeach; ?>
@@ -505,8 +470,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
         <thead>
             <tr>
                 <th>#</th>
-                <th>Fecha</th>
-                <th style="text-align:center">Puntuación</th>
+                <th>Puntuación</th>
                 <th style="text-align:center">Estrellas</th>
                 <th>Variación</th>
                 <th>Observaciones</th>
@@ -517,18 +481,18 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
             $promEv   = (float)$ev['Evaluacion'];
             $promAnts = isset($evals[$idx+1]) ? (float)$evals[$idx+1]['Evaluacion'] : null;
             $variacion = $promAnts !== null ? round($promEv - $promAnts, 1) : null;
-            $varTxt    = $variacion === null ? '<span class="tag-primera">Primera eval.</span>'
-                       : ($variacion > 0 ? "+$variacion ↑" : ($variacion < 0 ? "$variacion ↓" : "Sin cambio"));
-            $varColor  = $variacion === null ? '' : ($variacion > 0 ? 'color:#10b981' : ($variacion < 0 ? 'color:#ef4444' : ''));
+            $varTxt   = $variacion === null
+                ? '<span style="background:#dbeafe;color:#1d4ed8;font-size:9px;padding:2px 8px;border-radius:20px;font-weight:700">Primera eval.</span>'
+                : ($variacion > 0 ? "<span style='color:#10b981'>+$variacion ↑</span>"
+                : ($variacion < 0 ? "<span style='color:#ef4444'>$variacion ↓</span>" : 'Sin cambio'));
         ?>
         <tr>
             <td><?= $ev['Id_Evaluacion'] ?></td>
-            <td><?= date('d M Y', strtotime('now')) ?></td>
-            <td class="hist-prom" style="text-align:center"><?= number_format($promEv,1) ?>/10</td>
+            <td class="hist-prom"><?= number_format($promEv,1) ?>/10</td>
             <td class="hist-stars" style="text-align:center"><?= stars($promEv) ?></td>
-            <td style="<?= $varColor ?>"><?= $varTxt ?></td>
+            <td><?= $varTxt ?></td>
             <td style="font-size:10px;color:#64748b">
-                <?= $idx === 0 ? htmlspecialchars(mb_substr($ev['Observacion']??'—',0,40)) : '—' ?>
+                <?= $idx === 0 ? htmlspecialchars(mb_substr($ev['Observacion']??'—',0,50)) : '—' ?>
             </td>
         </tr>
         <?php endforeach; ?>
@@ -536,7 +500,6 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     </table>
 
     <!-- OBSERVACIONES -->
-    <?php if (!empty($evalActual['Observacion']) || !empty($evalActual['Puntos']) || !empty($evalActual['Pendientes'])): ?>
     <?php if (!empty($evalActual['Observacion'])): ?>
     <div class="section-title">💬 Observaciones y Recomendaciones</div>
     <div class="obs-box"><?= nl2br(htmlspecialchars($evalActual['Observacion'])) ?></div>
@@ -546,9 +509,8 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     <div class="obs-box"><?= nl2br(htmlspecialchars($evalActual['Puntos'])) ?></div>
     <?php endif; ?>
     <?php if (!empty($evalActual['Pendientes'])): ?>
-    <div class="section-title" style="margin-top:5mm">📋 Pendientes por Entregar</div>
+    <div class="section-title" style="margin-top:5mm">📋 Pendientes</div>
     <div class="obs-box"><?= nl2br(htmlspecialchars($evalActual['Pendientes'])) ?></div>
-    <?php endif; ?>
     <?php endif; ?>
 
     <!-- COMPROMISOS -->
@@ -567,18 +529,20 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
             <?php if (!empty($colab['Cargo'])): ?>
             <div class="firma-cargo"><?= htmlspecialchars($colab['Cargo']) ?></div>
             <?php endif; ?>
-            <div class="firma-area"><?= htmlspecialchars($colab['area_nombre']) ?></div>
+            <div class="firma-cargo"><?= htmlspecialchars($colab['area_nombre']) ?></div>
             <div class="firma-fecha">Fecha: _____ / _____ / __________</div>
         </div>
         <div class="firma-box">
             <div class="firma-linea"></div>
             <div class="firma-nombre">________________________________</div>
             <div class="firma-cargo">Jefe Directo / Evaluador</div>
-            <div class="firma-area">Nombre y cargo</div>
+            <div class="firma-cargo">Nombre y cargo</div>
             <div class="firma-fecha">Fecha: _____ / _____ / __________</div>
         </div>
     </div>
-    <p style="font-size:10px;color:#94a3b8;text-align:center;margin-top:8px;font-style:italic">Al firmar este documento, ambas partes confirman haber revisado y discutido el contenido de esta evaluación.<br>La firma no implica necesariamente acuerdo total con la evaluación, sino conocimiento de su contenido.</p>
+    <p style="font-size:10px;color:#94a3b8;text-align:center;margin-top:8px;font-style:italic">
+        Al firmar este documento, ambas partes confirman haber revisado y discutido el contenido de esta evaluación.
+    </p>
 
     <!-- FOOTER -->
     <div class="report-footer">
@@ -587,82 +551,49 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     </div>
 
 </div>
-<!-- jsPDF + html2canvas -->
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 document.getElementById('btnDescargarPDF')?.addEventListener('click', async function() {
-    const btn     = this;
-    const txtEl   = document.getElementById('btnPDFText');
-    const spinEl  = document.getElementById('btnPDFSpinner');
-
-    btn.disabled         = true;
-    txtEl.style.display  = 'none';
-    spinEl.style.display = 'inline';
-
+    const btn    = this;
+    const txtEl  = document.getElementById('btnPDFText');
+    const spinEl = document.getElementById('btnPDFSpinner');
+    btn.disabled = true; txtEl.style.display='none'; spinEl.style.display='inline';
     try {
         const { jsPDF } = window.jspdf;
-        const page      = document.querySelector('.page');
-
-        // Scroll to top antes de capturar
-        window.scrollTo(0, 0);
-
+        const page = document.querySelector('.page');
+        window.scrollTo(0,0);
         const canvas = await html2canvas(page, {
-            scale:           2,
-            useCORS:         true,
-            backgroundColor: '#ffffff',
-            logging:         false,
-            scrollY:         -window.scrollY,
-            windowWidth:     page.scrollWidth,
-            windowHeight:    page.scrollHeight,
+            scale:2, useCORS:true, backgroundColor:'#ffffff',
+            logging:false, scrollY:-window.scrollY,
+            windowWidth:page.scrollWidth, windowHeight:page.scrollHeight,
         });
-
-        const imgData  = canvas.toDataURL('image/jpeg', 0.95);
-        const pageW    = 215.9; // letter mm
-        const pageH    = 279.4;
-        const margin   = 0;
-        const usableW  = pageW - margin * 2;
-        const usableH  = pageH - margin * 2;
-
-        // Calcular cuántas páginas necesitamos
-        const ratio    = canvas.width / canvas.height;
-        const imgW     = usableW;
-        const imgH     = usableW / ratio; // alto total si fuera 1 página
-        const totalPgs = Math.ceil(imgH / usableH);
-
-        const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'letter' });
-
-        for (let pg = 0; pg < totalPgs; pg++) {
-            if (pg > 0) pdf.addPage();
-
-            // Recortar la parte correspondiente a esta página
-            const srcY      = Math.round((pg * usableH / imgH) * canvas.height);
-            const srcH      = Math.round((usableH / imgH) * canvas.height);
-            const cropH     = Math.min(srcH, canvas.height - srcY);
-
-            const tmpCanvas = document.createElement('canvas');
-            tmpCanvas.width  = canvas.width;
-            tmpCanvas.height = cropH;
-            const ctx = tmpCanvas.getContext('2d');
-            ctx.drawImage(canvas, 0, srcY, canvas.width, cropH, 0, 0, canvas.width, cropH);
-
-            const pageImg = tmpCanvas.toDataURL('image/jpeg', 0.95);
-            const pageImgH = (cropH / canvas.width) * usableW;
-            pdf.addImage(pageImg, 'JPEG', margin, margin, usableW, pageImgH);
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const pageW=215.9, pageH=279.4, margin=0;
+        const usableW=pageW-margin*2, usableH=pageH-margin*2;
+        const ratio=canvas.width/canvas.height;
+        const imgW=usableW, imgH=usableW/ratio;
+        const totalPgs=Math.ceil(imgH/usableH);
+        const pdf = new jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
+        for (let pg=0;pg<totalPgs;pg++) {
+            if (pg>0) pdf.addPage();
+            const srcY=Math.round((pg*usableH/imgH)*canvas.height);
+            const srcH=Math.round((usableH/imgH)*canvas.height);
+            const cropH=Math.min(srcH,canvas.height-srcY);
+            const tmp=document.createElement('canvas');
+            tmp.width=canvas.width; tmp.height=cropH;
+            tmp.getContext('2d').drawImage(canvas,0,srcY,canvas.width,cropH,0,0,canvas.width,cropH);
+            const pageImgH=(cropH/canvas.width)*usableW;
+            pdf.addImage(tmp.toDataURL('image/jpeg',0.95),'JPEG',margin,margin,usableW,pageImgH);
         }
-
-        // Nombre del archivo
-        const nombre  = <?= json_encode($colab['Nombre']) ?>;
-        const fecha   = new Date().toISOString().slice(0,10);
-        pdf.save('Evaluacion_' + nombre.replace(/\s+/g,'_') + '_' + fecha + '.pdf');
-
+        const nombre=<?= json_encode($colab['Nombre']) ?>;
+        const fecha=new Date().toISOString().slice(0,10);
+        pdf.save('Evaluacion_'+nombre.replace(/\s+/g,'_')+'_'+fecha+'.pdf');
     } catch(err) {
-        console.error('Error generando PDF:', err);
-        alert('Error al generar el PDF. Intenta de nuevo.');
+        console.error(err); alert('Error al generar PDF.');
     } finally {
-        btn.disabled         = false;
-        txtEl.style.display  = 'inline';
-        spinEl.style.display = 'none';
+        btn.disabled=false; txtEl.style.display='inline'; spinEl.style.display='none';
     }
 });
 </script>

@@ -101,7 +101,6 @@ $iconosAreas = [1=>'🛒',2=>'👥',3=>'📢',4=>'🚚',5=>'🏛️',6=>'💻',7
             <span class="status-dot"></span><span class="status-text">Activo ahora</span>
             <a href="../../php/logout.php" class="btn-logout">↩ Salir</a>
         </div>
-        <button class="btn-tour">▶ Ver Tour de Bienvenida</button>
     </div>
 </aside>
 

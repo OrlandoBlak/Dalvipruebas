@@ -774,6 +774,11 @@
                     alertMsg.textContent = `Evaluación #${data.id_evaluacion} guardada — Nivel: ${data.porcentaje}% — ${getNivelInfo(data.porcentaje).texto}`;
                     alertSuccess.style.display = 'flex';
                     alertSuccess.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Redirigir al menú general después de 2 segundos
+                    setTimeout(() => {
+                        const esUsuario = window.location.pathname.includes('/usuarios/');
+                        window.location.href = esUsuario ? 'homeuser.php' : 'homeadmin.php';
+                    }, 2000);
                 } else {
                     mostrarError(data.error || 'Error al guardar.');
                 }

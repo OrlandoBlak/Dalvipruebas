@@ -1,10 +1,11 @@
 <?php
 ob_start();
 error_reporting(0);
-// php/api_evaluacion.php
 session_start();
-$rolesPermitidos = ['Administrador', 'Usuario'];
-if (!isset($_SESSION['id']) || !in_array($_SESSION['rol'], $rolesPermitidos)) {
+
+$roles = ['Administrador', 'Usuario'];
+if (!isset($_SESSION['id']) || !in_array($_SESSION['rol'], $roles)) {
+    ob_end_clean();
     http_response_code(403);
     echo json_encode(['error' => 'No autorizado']);
     exit();
@@ -15,7 +16,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 $action = $_GET['action'] ?? ($_POST['action'] ?? '');
 
-// ── DETECTAR COLUMNAS DINÁMICAMENTE ──────────────────────
+// Detectar FK área
 function detectarFK($conexion, $tabla, $buscar) {
     $res = $conexion->query("SHOW COLUMNS FROM `$tabla`");
     while ($col = $res->fetch_assoc()) {
@@ -26,58 +27,32 @@ function detectarFK($conexion, $tabla, $buscar) {
 
 // ── COLABORADORES ─────────────────────────────────────────
 if ($action === 'colaboradores') {
+    $fkArea = detectarFK($conexion, 'colaboradores', 'area') ?? 'FK_Id_Area';
+    $cargoCol = detectarFK($conexion, 'colaboradores', 'cargo')
+             ?? detectarFK($conexion, 'colaboradores', 'puest') ?? null;
+    $selCargo = $cargoCol ? "c.`$cargoCol` AS Cargo" : "'' AS Cargo";
 
-    // Detectar columna FK de área en colaboradores
-    $fkArea  = detectarFK($conexion, 'colaboradores', 'area') ?? 'FK_Id_Area';
-    // Detectar columna de cargo
-    $colCargo = detectarFK($conexion, 'colaboradores', 'cargo')
-             ?? detectarFK($conexion, 'colaboradores', 'puesto')
-             ?? null;
-    $selectCargo = $colCargo ? "c.`$colCargo` AS Cargo" : "'' AS Cargo";
-
-    $sql = "
-        SELECT c.Id_Colaborador, c.Nombre, $selectCargo,
+    $res = $conexion->query("
+        SELECT c.Id_Colaborador, c.Nombre, $selCargo,
                a.Id_Area, a.Nombre AS area_nombre
         FROM colaboradores c
         LEFT JOIN areas a ON a.Id_Area = c.`$fkArea`
         ORDER BY a.Nombre ASC, c.Nombre ASC
-    ";
-    $res = $conexion->query($sql);
-    if (!$res) {
-        echo json_encode(['success'=>false,'error'=>$conexion->error,'sql'=>$sql]);
-        exit();
-    }
+    ");
+    if (!$res) { echo json_encode(['success'=>false,'error'=>$conexion->error]); exit(); }
     $rows = [];
     while ($r = $res->fetch_assoc()) $rows[] = $r;
-    echo json_encode(['success' => true, 'data' => $rows]);
+    echo json_encode(['success'=>true,'data'=>$rows]);
     exit();
 }
 
-// ── CRITERIOS (tabla puntos) ──────────────────────────────
+// ── CRITERIOS ─────────────────────────────────────────────
 if ($action === 'criterios') {
     $res = $conexion->query("SELECT Id_Criterios, Nombre_Criterio, Evaluando FROM puntos ORDER BY Nombre_Criterio ASC");
-    if (!$res) {
-        echo json_encode(['success'=>false,'error'=>$conexion->error]);
-        exit();
-    }
+    if (!$res) { echo json_encode(['success'=>false,'error'=>$conexion->error]); exit(); }
     $rows = [];
     while ($r = $res->fetch_assoc()) $rows[] = $r;
-    echo json_encode(['success' => true, 'data' => $rows]);
-    exit();
-}
-
-// ── KPS POR ÁREA ──────────────────────────────────────────
-if ($action === 'kps_area') {
-    $id_area = (int)($_GET['id_area'] ?? 0);
-    if ($id_area <= 0) { echo json_encode(['success'=>true,'data'=>null]); exit(); }
-
-    // Detectar FK de área en kps
-    $fkKps = detectarFK($conexion, 'kps', 'area') ?? 'Id_Area';
-    $stmt  = $conexion->prepare("SELECT k.Id_KPs, k.Metas, k.Pedidos FROM kps k WHERE k.`$fkKps` = ? LIMIT 1");
-    $stmt->bind_param("i", $id_area);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    echo json_encode(['success' => true, 'data' => $row]);
+    echo json_encode(['success'=>true,'data'=>$rows]);
     exit();
 }
 
@@ -89,14 +64,13 @@ if ($action === 'guardar') {
     $id_result         = (int)($_POST['id_result']         ?? 0) ?: null;
     $insignias_ids     = trim($_POST['insignias_ids']      ?? '');
     $insignias_nombres = trim($_POST['insignias_nombres']  ?? '');
+    $sliders_json      = $_POST['sliders'] ?? '{}';
+    $sliders           = json_decode($sliders_json, true) ?: [];
 
     $obs_observacion = trim($_POST['observacion']  ?? '');
     $obs_puntos      = trim($_POST['puntos']       ?? '');
     $obs_pendientes  = trim($_POST['pendientes']   ?? '');
     $obs_comentarios = trim($_POST['comentarios']  ?? '');
-
-    $sliders_json = $_POST['sliders'] ?? '{}';
-    $sliders      = json_decode($sliders_json, true) ?: [];
 
     if ($id_colaborador <= 0) {
         echo json_encode(['success'=>false,'error'=>'Selecciona un colaborador.']); exit();
@@ -105,19 +79,19 @@ if ($action === 'guardar') {
         echo json_encode(['success'=>false,'error'=>'Selecciona al menos un criterio.']); exit();
     }
 
-    // Calcular % y Nivel
+    // Calcular promedio y nivel
     $prom_sliders = !empty($sliders) ? array_sum($sliders) / count($sliders) : (float)$evaluacion;
     $pct = ($prom_sliders / 10) * 100;
 
-    if ($pct >= 90)      $id_estadistica = 1;
-    elseif ($pct >= 75)  $id_estadistica = 2;
-    elseif ($pct >= 60)  $id_estadistica = 3;
-    else                 $id_estadistica = 4;
+    if ($pct >= 90)     $id_estadistica = 1;
+    elseif ($pct >= 75) $id_estadistica = 2;
+    elseif ($pct >= 60) $id_estadistica = 3;
+    else                $id_estadistica = 4;
 
-    // Tomar primer Id_Insignia de la lista
+    // Id_Insignia
     $id_insignia = null;
     if (!empty($insignias_ids)) {
-        $insArr      = array_filter(array_map('intval', explode(',', $insignias_ids)));
+        $insArr = array_filter(array_map('intval', explode(',', $insignias_ids)));
         $id_insignia = !empty($insArr) ? $insArr[0] : null;
     }
 
@@ -131,7 +105,7 @@ if ($action === 'guardar') {
     }
     $id_observacion = $conexion->insert_id;
 
-    // INSERT evaluaciones — nueva estructura con Id_Result e Id_Insignia
+    // INSERT evaluaciones
     $nivel_float = round($prom_sliders, 1);
     $stmt_eval = $conexion->prepare("
         INSERT INTO evaluaciones
@@ -147,7 +121,39 @@ if ($action === 'guardar') {
     }
     $id_evaluacion = $conexion->insert_id;
 
-    // INSERT reportes automático
+    // ── GUARDAR CRITERIOS INDIVIDUALES ────────────────────
+    if ($id_evaluacion && !empty($sliders)) {
+        foreach ($sliders as $nombre_criterio => $valor_norm) {
+            // Obtener valor máximo del criterio desde tabla puntos
+            $stmtC = $conexion->prepare(
+                "SELECT Evaluando FROM puntos WHERE Nombre_Criterio = ? LIMIT 1"
+            );
+            $stmtC->bind_param("s", $nombre_criterio);
+            $stmtC->execute();
+            $crit = $stmtC->get_result()->fetch_assoc();
+            $valor_maximo = $crit ? (float)$crit['Evaluando'] : 10;
+
+            // valor_norm ya viene normalizado a /10 desde el JS
+            $valor_real = round(($valor_norm / 10) * $valor_maximo, 2);
+            $pct_crit   = $valor_maximo > 0 ? round(($valor_real / $valor_maximo) * 100, 1) : 0;
+
+            // Guardar como JSON legible
+            $datos = json_encode([
+                'criterio' => $nombre_criterio,
+                'actual'   => $valor_real,
+                'maximo'   => $valor_maximo,
+                'pct'      => $pct_crit
+            ], JSON_UNESCAPED_UNICODE);
+
+            $stmtCR = $conexion->prepare(
+                "INSERT INTO criterios_resultados (Id_Evaluacion, Datos_Guardado) VALUES (?, ?)"
+            );
+            $stmtCR->bind_param("is", $id_evaluacion, $datos);
+            $stmtCR->execute();
+        }
+    }
+
+    // INSERT reportes
     $id_dalvi    = (int)$_SESSION['id'];
     $descripcion = "Evaluación #$id_evaluacion - " . date('d/m/Y H:i');
     $stmt_rep = $conexion->prepare("
@@ -158,21 +164,15 @@ if ($action === 'guardar') {
     $stmt_rep->execute();
 
     echo json_encode([
-        'success'            => true,
-        'id_evaluacion'      => $id_evaluacion,
-        'nivel'              => $nivel_float,
-        'porcentaje'         => round($pct, 1),
-        'estadistica'        => $id_estadistica,
-        'insignias_nombres'  => $insignias_nombres,
+        'success'           => true,
+        'id_evaluacion'     => $id_evaluacion,
+        'nivel'             => $nivel_float,
+        'porcentaje'        => round($pct, 1),
+        'estadistica'       => $id_estadistica,
+        'insignias_nombres' => $insignias_nombres,
     ]);
     exit();
 }
 
-// ── DEBUG: verificar que el API responde ──────────────────
-if ($action === 'ping') {
-    echo json_encode(['success'=>true,'session'=>$_SESSION,'msg'=>'API funcionando']);
-    exit();
-}
-
 http_response_code(400);
-echo json_encode(['error' => 'Acción no válida', 'action_recibida' => $action]);
+echo json_encode(['error' => 'Acción no válida', 'action' => $action]);
