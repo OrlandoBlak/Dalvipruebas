@@ -772,10 +772,14 @@
             const idResult = window._lastIdResult || (kpiActual?.[0]?.Id_Result) || '';
 
             const fd = new FormData();
-            // Construir texto de razones con formato: "1.- Criterio: razón"
+            // Construir texto de razones — leer del DOM primero, luego del estado
             const criteriosSelArr = criterios.filter(c => criteriosSel.has(c.Id_Criterios));
             const razonesTexto = criteriosSelArr.map((c, i) => {
-                const razon = razonesValues[c.Nombre_Criterio] ?? '';
+                // Intentar leer del textarea directamente si existe en el DOM
+                const taEl = document.getElementById(`razon-${c.Id_Criterios}`);
+                const razon = taEl ? taEl.value : (razonesValues[c.Nombre_Criterio] ?? '');
+                // Actualizar estado
+                if (taEl) razonesValues[c.Nombre_Criterio] = razon;
                 return `${i+1}.- ${c.Nombre_Criterio}: "${razon}"`;
             }).join('\n');
 

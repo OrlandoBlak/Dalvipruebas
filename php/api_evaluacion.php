@@ -187,6 +187,8 @@ if ($action === 'guardar') {
         'porcentaje'        => round($pct, 1),
         'estadistica'       => $id_estadistica,
         'insignias_nombres' => $insignias_nombres,
+        'razones_guardadas' => !empty($razones_txt),
+        'razones_len'       => strlen($razones_txt),
     ]);
     exit();
 }
