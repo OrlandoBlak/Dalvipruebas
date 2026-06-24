@@ -83,6 +83,34 @@ if (!empty($criteriosArr)) {
     }
 }
 
+// Cargar razones de evaluación desde tabla razones
+$razonesData = [];
+$stmtRaz = $conexion->prepare("
+    SELECT r.Objetivo
+    FROM razones r
+    INNER JOIN evaluaciones e ON e.Id_Razon = r.Id_Razon
+    WHERE e.Id_Evaluacion = ?
+    LIMIT 1
+");
+if ($stmtRaz) {
+    $stmtRaz->bind_param("i", $evalActual['Id_Evaluacion']);
+    $stmtRaz->execute();
+    $razRow = $stmtRaz->get_result()->fetch_assoc();
+    if ($razRow && !empty($razRow['Objetivo'])) {
+        // Parsear "1.- Criterio: "texto"" → array keyed by criterio
+        $lineas = explode("
+", $razRow['Objetivo']);
+        foreach ($lineas as $linea) {
+            $linea = trim($linea);
+            if (empty($linea)) continue;
+            // Regex: "N.- Nombre: "texto""
+            if (preg_match('/^\d+\.\-\s*(.+?):\s*"(.*)"$/u', $linea, $m)) {
+                $razonesData[trim($m[1])] = trim($m[2]);
+            }
+        }
+    }
+}
+
 // KPIs del área con resultados
 $kpisArea = [];
 if ($colab['Id_Area']) {
@@ -229,8 +257,8 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
 .td-diff.negativo { color:#ef4444; }
 
 .barra-wrap  { display:flex; align-items:center; gap:5px; margin-bottom:2px; }
-.barra-label { font-size:8px; color:#94a3b8; width:28px; text-align:right; flex-shrink:0; }
-.barra-bg    { flex:1; height:6px; background:#e2e8f0; border-radius:4px; overflow:hidden; }
+.barra-label { font-size:9px; color:#94a3b8; width:34px; text-align:right; flex-shrink:0; }
+.barra-bg    { flex:1; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; }
 .barra-fill-actual { height:100%; background:#3b82f6; border-radius:4px; }
 .barra-fill-meta   { height:100%; background:#10b981; border-radius:4px; }
 .barra-pct   { font-size:9px; font-weight:700; width:32px; }
@@ -260,9 +288,14 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     font-size:11.5px; color:#92400e; line-height:1.6; min-height:40px;
 }
 .compromisos-box {
-    border:1px dashed #f59e0b; border-radius:8px;
-    padding:12px 14px; background:#fffbeb; min-height:60px;
+    border:1.5px dashed #f59e0b; border-radius:8px;
+    padding:16px 18px; background:#fffbeb; min-height:140px;
+    display:flex; flex-direction:column; gap:18px; justify-content:flex-start;
 }
+.compromisos-linea {
+    border-bottom:1px solid #fbbf24; height:1px; width:100%;
+}
+.pagebreak { page-break-before: always; break-before: page; }
 .compromisos-hint { font-style:italic; color:#d97706; font-size:11px; }
 
 .firmas-section { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:8mm; }
@@ -352,12 +385,12 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     <table class="criterios-tabla">
         <thead>
             <tr>
-                <th>Criterio</th>
-                <th style="text-align:center">Peso</th>
-                <th style="text-align:center">Actual</th>
-                <th style="text-align:center">Deseado</th>
-                <th style="text-align:center">Diferencia</th>
-                <th>Progreso</th>
+                <th style="width:16%">Criterio</th>
+                <th style="text-align:center;width:6%">Peso</th>
+                <th style="text-align:center;width:8%">Actual</th>
+                <th style="text-align:center;width:8%">Deseado</th>
+                <th style="width:28%">Progreso</th>
+                <th style="width:34%">Razón de Calificación</th>
             </tr>
         </thead>
         <tbody>
@@ -378,19 +411,16 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
             }
 
             $isStars = $maxVal <= 5;
-            $deseado = $maxVal * 0.9;
-            $pctMeta = 90;
-            $diff    = round($valActual - $deseado, 1);
+            $deseado = $maxVal; // meta = 100%
+            $pctMeta = 100;
             $peso    = $pesoCriterio;
         ?>
+        <?php $razonTexto = $razonesData[$cNom] ?? ''; ?>
         <tr>
             <td class="td-criterio"><?= htmlspecialchars($cNom) ?></td>
             <td class="td-peso"><?= $peso ?>%</td>
             <td class="td-actual"><?= number_format($valActual,1) ?>/<?= $maxVal ?><?= $isStars?' ⭐':'' ?></td>
             <td class="td-deseado"><?= number_format($deseado,1) ?>/<?= $maxVal ?><?= $isStars?' ⭐':'' ?></td>
-            <td class="td-diff <?= $diff >= 0 ? 'positivo' : 'negativo' ?>">
-                <?= $diff >= 0 ? '+' : '' ?><?= number_format($diff,1) ?> <?= $diff < 0 ? '⚠️' : '✅' ?>
-            </td>
             <td>
                 <div class="barra-wrap">
                     <span class="barra-label">Actual</span>
@@ -403,14 +433,22 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
                     <span class="barra-pct meta"><?= $pctMeta ?>%</span>
                 </div>
             </td>
+            <td style="font-size:10.5px;color:#475569;vertical-align:middle;line-height:1.5">
+                <?php if (!empty($razonTexto)): ?>
+                    <?= htmlspecialchars($razonTexto) ?>
+                <?php else: ?>
+                    <span style="color:#cbd5e1;font-style:italic">—</span>
+                <?php endif; ?>
+            </td>
         </tr>
         <?php endforeach; ?>
         </tbody>
     </table>
 
-    <!-- KPIs -->
+    <!-- KPIs — salto de página para mejor orden -->
+    <div class="pagebreak"></div>
     <?php if (!empty($kpisArea)): ?>
-    <div class="section-title">📋 KPIs Asignados</div>
+    <div class="section-title" style="margin-top:0">📋 KPIs Asignados</div>
     <table class="kpis-tabla">
         <thead>
             <tr>
@@ -447,7 +485,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
         </tbody>
     </table>
     <?php else: ?>
-    <div class="section-title">📋 KPIs Asignados</div>
+    <div class="section-title" style="margin-top:0">📋 KPIs Asignados</div>
     <p style="font-size:12px;color:#94a3b8;font-style:italic;margin-bottom:4mm">Sin KPIs asignados.</p>
     <?php endif; ?>
 
@@ -456,7 +494,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     <div class="section-title">🏅 Insignias de Valores Dalvi</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6mm">
         <?php foreach ($insArr as $i => $insNombre): ?>
-        <div style="display:flex;align-items:center;gap:7px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:20px;padding:5px 13px;">
+        <div class="ins-chip" style="display:flex;align-items:center;gap:7px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:20px;padding:5px 13px;">
             <span style="font-size:14px"><?= $insIconos[$i%count($insIconos)] ?? '🏅' ?></span>
             <span style="font-size:11px;font-weight:700;color:#92400e"><?= htmlspecialchars($insNombre) ?></span>
         </div>
@@ -513,10 +551,16 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
     <div class="obs-box"><?= nl2br(htmlspecialchars($evalActual['Pendientes'])) ?></div>
     <?php endif; ?>
 
-    <!-- COMPROMISOS -->
-    <div class="section-title">🔔 Compromisos por Parte del Colaborador</div>
+    <!-- COMPROMISOS — salto de página -->
+    <div class="pagebreak"></div>
+    <div class="section-title" style="margin-top:0">🔔 Compromisos por Parte del Colaborador</div>
     <div class="compromisos-box">
-        <p class="compromisos-hint">El colaborador declara los siguientes compromisos de mejora y acción para el próximo período:</p>
+        <p class="compromisos-hint" style="margin-bottom:4px">El colaborador declara los siguientes compromisos de mejora y acción para el próximo período:</p>
+        <div class="compromisos-linea"></div>
+        <div class="compromisos-linea"></div>
+        <div class="compromisos-linea"></div>
+        <div class="compromisos-linea"></div>
+        <div class="compromisos-linea"></div>
     </div>
     <p style="font-size:10px;color:#94a3b8;margin-top:4px;font-style:italic">* Este apartado debe ser completado de puño y letra por el colaborador al momento de recibir el documento.</p>
 
@@ -562,33 +606,89 @@ document.getElementById('btnDescargarPDF')?.addEventListener('click', async func
     btn.disabled = true; txtEl.style.display='none'; spinEl.style.display='inline';
     try {
         const { jsPDF } = window.jspdf;
-        const page = document.querySelector('.page');
+        const page  = document.querySelector('.page');
+        const scale = 2;
         window.scrollTo(0,0);
+
         const canvas = await html2canvas(page, {
-            scale:2, useCORS:true, backgroundColor:'#ffffff',
+            scale, useCORS:true, backgroundColor:'#ffffff',
             logging:false, scrollY:-window.scrollY,
             windowWidth:page.scrollWidth, windowHeight:page.scrollHeight,
         });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const pageW=215.9, pageH=279.4, margin=0;
-        const usableW=pageW-margin*2, usableH=pageH-margin*2;
-        const ratio=canvas.width/canvas.height;
-        const imgW=usableW, imgH=usableW/ratio;
-        const totalPgs=Math.ceil(imgH/usableH);
-        const pdf = new jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
-        for (let pg=0;pg<totalPgs;pg++) {
-            if (pg>0) pdf.addPage();
-            const srcY=Math.round((pg*usableH/imgH)*canvas.height);
-            const srcH=Math.round((usableH/imgH)*canvas.height);
-            const cropH=Math.min(srcH,canvas.height-srcY);
-            const tmp=document.createElement('canvas');
-            tmp.width=canvas.width; tmp.height=cropH;
-            tmp.getContext('2d').drawImage(canvas,0,srcY,canvas.width,cropH,0,0,canvas.width,cropH);
-            const pageImgH=(cropH/canvas.width)*usableW;
-            pdf.addImage(tmp.toDataURL('image/jpeg',0.95),'JPEG',margin,margin,usableW,pageImgH);
+
+        const pageW=215.9, pageH=279.4;
+        const marginH = 8;  // mm margen superior/inferior por página
+        const marginW = 0;  // mm margen lateral (la página ya tiene padding)
+        const usableW   = pageW - marginW*2;
+        const usableH   = pageH - marginH*2;
+        const pxPerMm   = canvas.width / usableW;
+        const usableHpx = usableH * pxPerMm;
+
+        const pageRect = page.getBoundingClientRect();
+
+        // Saltos de página obligatorios (.pagebreak)
+        const forcedBreaks = Array.from(page.querySelectorAll('.pagebreak')).map(el => {
+            const r = el.getBoundingClientRect();
+            return Math.round((r.top - pageRect.top) * scale);
+        }).filter(y => y > 0 && y < canvas.height).sort((a,b)=>a-b);
+
+        // Elementos que nunca deben cortarse a la mitad
+        const avoidSelectors = '.perfil-section, .stats-row, .criterios-tabla tr, .kpis-tabla tr, .historial-tabla tr, .firma-box, .compromisos-box, .ins-chip, .stat-box';
+        const avoidRanges = Array.from(page.querySelectorAll(avoidSelectors)).map(el => {
+            const r = el.getBoundingClientRect();
+            return {
+                top:    Math.round((r.top    - pageRect.top) * scale),
+                bottom: Math.round((r.bottom - pageRect.top) * scale)
+            };
+        });
+
+        function snapCut(y) {
+            for (const rg of avoidRanges) {
+                if (y > rg.top && y < rg.bottom) return rg.top;
+            }
+            return y;
         }
-        const nombre=<?= json_encode($colab['Nombre']) ?>;
-        const fecha=new Date().toISOString().slice(0,10);
+
+        // Construir límites de corte respetando saltos forzados y elementos protegidos
+        const boundaries = [0];
+        let cursor = 0;
+        let guard  = 0;
+        while (cursor < canvas.height && guard < 200) {
+            guard++;
+            let next = cursor + usableHpx;
+
+            const upcoming = forcedBreaks.find(b => b > cursor && b < next);
+            if (upcoming) {
+                next = upcoming;
+            } else {
+                next = Math.min(next, canvas.height);
+                const snapped = snapCut(next);
+                next = (snapped > cursor) ? snapped : next;
+            }
+            next = Math.min(next, canvas.height);
+            if (next <= cursor) next = Math.min(cursor + usableHpx, canvas.height);
+            boundaries.push(next);
+            cursor = next;
+        }
+
+        const pdf = new jsPDF({orientation:'portrait', unit:'mm', format:'letter'});
+        for (let i = 0; i < boundaries.length - 1; i++) {
+            const srcY = boundaries[i];
+            const srcH = boundaries[i+1] - srcY;
+            if (srcH <= 0) continue;
+            if (i > 0) pdf.addPage();
+
+            const tmp = document.createElement('canvas');
+            tmp.width  = canvas.width;
+            tmp.height = srcH;
+            tmp.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+            const pageImgH = (srcH / canvas.width) * usableW;
+            pdf.addImage(tmp.toDataURL('image/jpeg', 0.95), 'JPEG', marginW, marginH, usableW, pageImgH);
+        }
+
+        const nombre = <?= json_encode($colab['Nombre']) ?>;
+        const fecha  = new Date().toISOString().slice(0,10);
         pdf.save('Evaluacion_'+nombre.replace(/\s+/g,'_')+'_'+fecha+'.pdf');
     } catch(err) {
         console.error(err); alert('Error al generar PDF.');

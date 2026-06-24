@@ -66,6 +66,7 @@ if ($action === 'guardar') {
     $insignias_nombres = trim($_POST['insignias_nombres']  ?? '');
     $sliders_json      = $_POST['sliders'] ?? '{}';
     $sliders           = json_decode($sliders_json, true) ?: [];
+    $razones_txt       = trim($_POST['razones'] ?? '');
 
     $obs_observacion = trim($_POST['observacion']  ?? '');
     $obs_puntos      = trim($_POST['puntos']       ?? '');
@@ -162,6 +163,22 @@ if ($action === 'guardar') {
     ");
     $stmt_rep->bind_param("siiii", $descripcion, $id_estadistica, $id_dalvi, $id_colaborador, $id_evaluacion);
     $stmt_rep->execute();
+
+    // Guardar razones en tabla razones
+    if ($id_evaluacion && !empty($razones_txt)) {
+        $stmtRaz = $conexion->prepare(
+            "INSERT INTO razones (Objetivo) VALUES (?)"
+        );
+        if ($stmtRaz) {
+            $stmtRaz->bind_param("s", $razones_txt);
+            $stmtRaz->execute();
+            $id_razon = $conexion->insert_id;
+            // Enlazar a evaluacion si la tabla tiene Id_Razon en evaluaciones
+            if ($id_razon) {
+                $conexion->query("UPDATE evaluaciones SET Id_Razon = $id_razon WHERE Id_Evaluacion = $id_evaluacion");
+            }
+        }
+    }
 
     echo json_encode([
         'success'           => true,

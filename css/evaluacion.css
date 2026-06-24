@@ -689,3 +689,41 @@ input[type="range"].eval-slider-stars::-webkit-slider-thumb { background: #f59e0
 
 /* Resumen item seleccionado */
 .kpi-resumen-sel { border-color: #10b981 !important; }
+/* ── RAZÓN DE CALIFICACIÓN ─────────────────────────────── */
+.razon-wrap {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+}
+.razon-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 6px;
+}
+.razon-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-family: 'Sora', sans-serif;
+    font-size: 12.5px;
+    color: var(--text-primary);
+    background: var(--bg-main);
+    resize: vertical;
+    outline: none;
+    min-height: 58px;
+    line-height: 1.5;
+    transition: border-color .2s;
+}
+.razon-textarea:focus {
+    border-color: var(--accent-light);
+    background: #fff;
+}
+.razon-textarea::placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+}

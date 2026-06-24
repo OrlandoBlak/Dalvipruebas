@@ -22,6 +22,7 @@
         let colabActual       = null;
         let kpiActual         = [];
         let kpisSeleccionados = new Set();
+        let razonesValues     = {}; // { nombre_criterio: texto_razon }
 
         // ── ELEMENTOS ─────────────────────────────────────
         const buscarColab    = document.getElementById('buscarColab');
@@ -213,10 +214,28 @@
                             data-max="${maxVal}"
                             id="slider-${c.Id_Criterios}">
                     </div>
+                    <div class="razon-wrap">
+                        <label class="razon-label">📝 Razón de la calificación:</label>
+                        <textarea
+                            class="razon-textarea"
+                            id="razon-${c.Id_Criterios}"
+                            data-nombre="${esc(c.Nombre_Criterio)}"
+                            rows="2"
+                            placeholder="Describe brevemente la razón de esta calificación..."
+                        >${razonesValues[c.Nombre_Criterio] ?? ''}</textarea>
+                    </div>
                 </div>`;
             }).join('');
 
             // Eventos sliders
+            // Guardar razones al escribir
+            slidersLista.querySelectorAll('.razon-textarea').forEach(ta => {
+                ta.value = razonesValues[ta.dataset.nombre] ?? '';
+                ta.addEventListener('input', () => {
+                    razonesValues[ta.dataset.nombre] = ta.value;
+                });
+            });
+
             slidersLista.querySelectorAll('.eval-slider').forEach(slider => {
                 slider.addEventListener('input', () => {
                     const id     = slider.dataset.id;
@@ -753,6 +772,13 @@
             const idResult = window._lastIdResult || (kpiActual?.[0]?.Id_Result) || '';
 
             const fd = new FormData();
+            // Construir texto de razones con formato: "1.- Criterio: razón"
+            const criteriosSelArr = criterios.filter(c => criteriosSel.has(c.Id_Criterios));
+            const razonesTexto = criteriosSelArr.map((c, i) => {
+                const razon = razonesValues[c.Nombre_Criterio] ?? '';
+                return `${i+1}.- ${c.Nombre_Criterio}: "${razon}"`;
+            }).join('\n');
+
             fd.append('action',            'guardar');
             fd.append('id_colaborador',    colabActual.Id_Colaborador);
             fd.append('criterios',         criteriosTxt);
@@ -761,6 +787,7 @@
             fd.append('insignias_ids',     obtenerInsigniasIds());
             fd.append('insignias_nombres', obtenerInsigniasNombres());
             fd.append('sliders',        slidersJSON);
+            fd.append('razones',        razonesTexto);
             fd.append('observacion',    document.getElementById('txtObservacion').value);
             fd.append('puntos',         document.getElementById('txtPuntos').value);
             fd.append('pendientes',     document.getElementById('txtPendientes').value);
