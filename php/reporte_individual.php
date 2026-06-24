@@ -437,7 +437,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background:#f5f7fb; color:#1e
                 <?php if (!empty($razonTexto)): ?>
                     <?= htmlspecialchars($razonTexto) ?>
                 <?php else: ?>
-                    <span style="color:#cbd5e1;font-style:italic">—</span>
+                    <span style="color:#cbd5e1;font-style:italic">Sin razones</span>
                 <?php endif; ?>
             </td>
         </tr>
